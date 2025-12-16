@@ -1,65 +1,61 @@
-# import redpitaya_scpi as scpi
-from numpy import linspace
-
 from PySide6.QtCore import QObject, Signal
 import time
 
-from awg_ctl import set_awg
+from awg_ctl import AwgCtl
+from mh_ctl import MhCtl
 
-import pyvisa as visa
-from snAPI.Main import *
 
 class ScanWorker(QObject):
     QObject
-    finished_scan = Signal(dict)
+    finished_qm_scan = Signal(dict)
+    finished_ref_scan = Signal(dict)
 
     def __init__(self):
         super().__init__()
         self._stop = False
 
-        # Set up VISA instrument object
-        rm = visa.ResourceManager('@py')
-        self.awg = rm.open_resource('TCPIP0::141.20.45.148::inst0::INSTR')
-        self.awg.timeout = 10000 #float('+inf') #(in ms)
-        print('Connected to ', self.awg.query('*idn?'))
-
-        # Init Multiharp
-        self.sn = snAPI()
-        self.sn.getDevice()
-
-        self.sn.initDevice(MeasMode.Histogram)
-        self.sn.loadIniConfig("./MH.ini")
+        self.awg_ctl = AwgCtl()
+        self.mh_ctl = MhCtl()
 
     def __del__(self):
-        self.awg.close()
-        self.sn.closeDevice()
+        del(self.mh_ctl)
+        del(self.awg_ctl)
 
-    def mh_get_data(self):
-        self.sn.histogram.measure(acqTime=1000, waitFinished=True, savePTU=True)
-        data, bins = self.sn.histogram.getData()
+    def do_reference_measurement(self, signal_width):
+        self.awg_ctl.set_awg(self.awg, write_width, signal_width, offset)
+        time.sleep(2)
+        data, bins = self.mh_ctl.get_data()
 
-        data = data[1]#[:6000]
-        bins = bins#[:6000]
-        return data, bins
+        result = {
+            "signal_width": signal_width,
+            "bins": bins,
+            "data": data,
+        }
+
+        self.finished_ref_scan.emit(result)
 
     def do_single_scan(self, write_width, signal_width, offset):
-        set_awg(self.awg, write_width, signal_width, offset)
-        data, bins = self.mh_get_data()
+        self.awg_ctl.set_awg(self.awg, write_width, signal_width, offset)
+        time.sleep(2)
+        data, bins = self.mh_ctl.get_data()
 
         result = {
             "write_width": write_width,
             "signal_width": signal_width,
             "offset": offset,
+            "bins": bins,
             "data": data,
-            "bins": bins
         }
 
         self.finished_scan.emit(result)
 
     def do_repeated_scan(self, params):
         self._stop = False
-        for write_width in params["write_width"]:
-            for signal_width in params["signal_width"]:
+        for signal_width in params["signal_width"]:
+            # perform reference measurement in EIT mode for any new signal width
+            self.do_reference_measurement(signal_width)
+
+            for write_width in params["write_width"]:
                 for offset in params["offset"]:
                     if self._stop:
                         return

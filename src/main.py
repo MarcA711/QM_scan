@@ -14,97 +14,100 @@ pg.setConfigOption('foreground', 'k')
 
 class MyWidget(QtWidgets.QWidget):
     start_scanning = Signal(dict)
+    scan_data = {}
+
     def __init__(self):
         super().__init__()
 
-        self.scan_data = {}
-
+        # thread for scanning in background
         self.worker_thread = QThread()
         self.scan_worker = ScanWorker()
         self.scan_worker.moveToThread(self.worker_thread)
         self.worker_thread.finished.connect(self.scan_worker.deleteLater)
-        self.scan_worker.finished_scan.connect(self.update_scan_data)
+        self.scan_worker.finished_qm_scan.connect(self.update_qm_scan_data)
+        self.scan_worker.finished_ref_scan.connect(self.update_ref_scan_data)
         self.start_scanning.connect(self.scan_worker.do_repeated_scan)
         self.worker_thread.start()
 
+        # item model that references the data from each measurement
         self.model = QtGui.QStandardItemModel()
         self.model.itemChanged.connect(self.plot_data)
 
         self.layout = QtWidgets.QVBoxLayout(self)
 
-        self.main_split = QtWidgets.QSplitter()
-        self.layout.addWidget(self.main_split)
+        # horizontally splitted view: left: plot; righ: properties
+        main_split = QtWidgets.QSplitter()
+        self.layout.addWidget(main_split)
 
-        self.graph: pg.GraphicsLayoutWidget = pg.GraphicsLayoutWidget()
-        self.main_split.addWidget(self.graph)
-
-        self.signal_plot: pg.PlotItem = self.graph.addPlot()
+        # plot on the left side
+        graph = pg.GraphicsLayoutWidget()
+        main_split.addWidget(graph)
+        self.signal_plot: pg.PlotItem = graph.addPlot()
         self.signal_plot.setLabels(title="", bottom="Time [x]", left="Counts")
         self.signal_plot.showGrid(x=True, y=True)
 
-        self.properties = QtWidgets.QWidget()
-        self.main_split.addWidget(self.properties)
-        self.properties_layout = QtWidgets.QVBoxLayout()
-        self.properties.setLayout(self.properties_layout)
+        # properties on the right:
+        # splitted vertically: up: measurement series list; bottom: scan settings
+        properties = QtWidgets.QWidget()
+        main_split.addWidget(properties)
+        properties_layout = QtWidgets.QVBoxLayout()
+        properties.setLayout(properties_layout)
 
-        self.data_control_box = QtWidgets.QGroupBox("Data")
-        self.properties_layout.addWidget(self.data_control_box)
-        self.data_control_box_layout = QtWidgets.QVBoxLayout()
-        self.data_control_box.setLayout(self.data_control_box_layout)
-        self.data_button_layout = QtWidgets.QHBoxLayout()
-        self.data_control_box_layout.addLayout(self.data_button_layout)
-        self.data_save_button = QtWidgets.QPushButton()
-        self.data_button_layout.addWidget(self.data_save_button)
-        self.data_save_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.DocumentSave))
-        self.data_save_button.clicked.connect(self.save_current_data)
-        self.data_load_button = QtWidgets.QPushButton()
-        self.data_button_layout.addWidget(self.data_load_button)
-        self.data_load_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.DocumentOpen))
-        self.data_load_button.clicked.connect(self.load_data)
-        self.data_del_button = QtWidgets.QPushButton()
-        self.data_button_layout.addWidget(self.data_del_button)
-        self.data_del_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.EditDelete))
-        self.data_del_button.clicked.connect(self.delete_data)
-        self.data_list = QtWidgets.QListView()
-        self.data_control_box_layout.addWidget(self.data_list)
-        self.data_list.setModel(self.model)
+        ###
+        # start measurement series list
+        ###
 
-        self.scan_control_box = QtWidgets.QGroupBox("Scan setting")
-        self.properties_layout.addWidget(self.scan_control_box)
-        self.scan_control_box_layout = QtWidgets.QVBoxLayout()
-        self.scan_control_box.setLayout(self.scan_control_box_layout)
+        # QGroupBox as container for measurement series
+        data_control_box = QtWidgets.QGroupBox("Data")
+        properties_layout.addWidget(data_control_box)
+        data_control_box_layout = QtWidgets.QVBoxLayout()
+        data_control_box.setLayout(data_control_box_layout)
 
-        self.scan_control_write_width_layout = QtWidgets.QHBoxLayout()
-        self.scan_control_box_layout.addLayout(self.scan_control_write_width_layout)
-        self.scan_control_write_width_layout.addWidget(QtWidgets.QLabel("Write width"))
-        self.scan_control_write_width_min = QtWidgets.QDoubleSpinBox()
-        self.scan_control_write_width_layout.addWidget(self.scan_control_write_width_min)
-        self.scan_control_write_width_max = QtWidgets.QDoubleSpinBox()
-        self.scan_control_write_width_layout.addWidget(self.scan_control_write_width_max)
-        self.scan_control_write_width_step = QtWidgets.QSpinBox()
-        self.scan_control_write_width_layout.addWidget(self.scan_control_write_width_step)
+        # layout for save, load and deleta buttons in top row
+        data_button_layout = QtWidgets.QHBoxLayout()
+        data_control_box_layout.addLayout(data_button_layout)
 
-        self.scan_control_signal_width_layout = QtWidgets.QHBoxLayout()
-        self.scan_control_box_layout.addLayout(self.scan_control_signal_width_layout)
-        self.scan_control_signal_width_layout.addWidget(QtWidgets.QLabel("Signal width"))
-        self.scan_control_signal_width_min = QtWidgets.QDoubleSpinBox()
-        self.scan_control_signal_width_layout.addWidget(self.scan_control_signal_width_min)
-        self.scan_control_signal_width_max = QtWidgets.QDoubleSpinBox()
-        self.scan_control_signal_width_layout.addWidget(self.scan_control_signal_width_max)
-        self.scan_control_signal_width_step = QtWidgets.QSpinBox()
-        self.scan_control_signal_width_layout.addWidget(self.scan_control_signal_width_step)
+        # save
+        data_save_button = QtWidgets.QPushButton()
+        data_button_layout.addWidget(data_save_button)
+        data_save_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.DocumentSave))
+        data_save_button.clicked.connect(self.save_current_data)
 
-        self.scan_control_offset_layout = QtWidgets.QHBoxLayout()
-        self.scan_control_box_layout.addLayout(self.scan_control_offset_layout)
-        self.scan_control_offset_layout.addWidget(QtWidgets.QLabel("Offset"))
-        self.scan_control_offset_min = QtWidgets.QDoubleSpinBox()
-        self.scan_control_offset_layout.addWidget(self.scan_control_offset_min)
-        self.scan_control_offset_max = QtWidgets.QDoubleSpinBox()
-        self.scan_control_offset_layout.addWidget(self.scan_control_offset_max)
-        self.scan_control_offset_step = QtWidgets.QSpinBox()
-        self.scan_control_offset_layout.addWidget(self.scan_control_offset_step)
+        # load
+        data_load_button = QtWidgets.QPushButton()
+        data_button_layout.addWidget(data_load_button)
+        data_load_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.DocumentOpen))
+        data_load_button.clicked.connect(self.load_data)
+
+        # delete
+        data_del_button = QtWidgets.QPushButton()
+        data_button_layout.addWidget(data_del_button)
+        data_del_button.setIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.EditDelete))
+        data_del_button.clicked.connect(self.delete_data)
+
+        # list of data
+        data_list = QtWidgets.QListView()
+        data_control_box_layout.addWidget(data_list)
+        data_list.setModel(self.model)
+
+        ###
+        # end measurement series list
+        ###
+
+        # QGroupBox as container for scan settings
+        scan_control_box = QtWidgets.QGroupBox("Scan setting")
+        properties_layout.addWidget(scan_control_box)
+        scan_control_box_layout = QtWidgets.QVBoxLayout()
+        scan_control_box.setLayout(scan_control_box_layout)
+
+        self.parameter_widgets = {}
+        for parameter_name in ["write_width", "signal_width", "offset"]:
+            item, ref = self.parameter_settings(parameter_name)
+            self.parameter_widgets[parameter_name] = ref
+            scan_control_box_layout.addLayout(item)
+        
         self.scan_control_start_button = QtWidgets.QPushButton("start")
-        self.scan_control_box_layout.addWidget(self.scan_control_start_button)
+        scan_control_box_layout.addWidget(self.scan_control_start_button)
         self.scan_control_start_button.clicked.connect(self.start_scan)
 
     def closeEvent(self, event):
@@ -132,31 +135,46 @@ class MyWidget(QtWidgets.QWidget):
         item.setIcon(pixmap)
 
         return item
+
+    def parameter_settings(self, name):
+        name = name.replace("_", " ")
+        layout = QtWidgets.QHBoxLayout()
+
+        text = QtWidgets.QLabel(name)
+        layout.addWidget(text)
+
+        val_min = QtWidgets.QDoubleSpinBox()
+        val_max = QtWidgets.QDoubleSpinBox()
+        val_step = QtWidgets.QSpinBox()
+        val_step.setMinimum(1)
+
+        layout.addWidget(val_min)
+        layout.addWidget(val_max)
+        layout.addWidget(val_step)
+
+        return layout, (val_min, val_max, val_step)
+
     
     def start_scan(self):
         self.model.clear()
         self.scan_data = {}
-        parameters = {
-            "write_width": np.linspace(self.scan_control_write_width_min.value(),
-                                        self.scan_control_write_width_max.value(),
-                                        self.scan_control_write_width_step.value()),
-            "signal_width": np.linspace(self.scan_control_signal_width_min.value(),
-                                        self.scan_control_signal_width_max.value(),
-                                        self.scan_control_signal_width_step.value()),
-            "offset": np.linspace(self.scan_control_offset_min.value(),
-                                        self.scan_control_offset_max.value(),
-                                        self.scan_control_offset_step.value())
-        }
+        self.plot_data()
+
+        parameters = {name: np.linspace(ref[0].value(), ref[1].value(), ref[2].value()) for name, ref in self.parameter_widgets.items()}
         
         self.start_scanning.emit(parameters)
 
-
-    def update_scan_data(self, result):
+    def update_qm_scan_data(self, result):
         name = f"{round(result["write_width"],2)} {round(result["signal_width"],2)} {round(result["offset"],2)}"
         self.scan_data[name] = result
         item = self.new_item(name)
         self.model.appendRow(item)
-        # self.plot_data()
+
+    def update_ref_scan_data(self, result):
+        name = f"Reference: {round(result["signal_width"],2)}"
+        self.scan_data[name] = result
+        item = self.new_item(name)
+        self.model.appendRow(item)
 
     def stop_scanning(self):
         self.scan_worker._stop = True
