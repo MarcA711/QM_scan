@@ -27,6 +27,11 @@ class AwgCtl():
         print('Connected to ', self.awg.query('*idn?'))
 
     def __del__(self):
+        self.awg.write('output1 off')
+        self.awg.write('output2 off')
+        self.awg.write('output3 off')
+        self.awg.write('output4 off')
+        self.awg.write('awgcontrol:stop:immediate')
         self.awg.close()
 
     def gen_pulse(self, write_width, signal_width, offset):
@@ -82,33 +87,54 @@ class AwgCtl():
 
         return samples, name_control, name_signal, control_ch, signal_ch, marker1
 
-    def set_awg(self, awg, write_width, signal_width, offset):
+    def set_awg_scan(self, write_width, signal_width, offset):
         "Generate Pulses"
         samples, name_control, name_signal, control_ch, signal_ch, marker1 = self.gen_pulse(write_width, signal_width, offset)
 
         "Send Waveform Data"
-        #AWGFunc.sendWaveform(awg, name, numSamples, wfm_arr)
-        AWGfun.sendWaveform(awg, name_control, samples, control_ch)
-        AWGfun.sendWaveform(awg, name_signal, samples, signal_ch)
+        #AWGFunc.sendWaveform(self.awg, name, numSamples, wfm_arr)
+        AWGfun.sendWaveform(self.awg, name_control, samples, control_ch)
+        AWGfun.sendWaveform(self.awg, name_signal, samples, signal_ch)
 
         "Send Marker data"
-        #AWGFunc.sendMarkerData(awg, name, numSamples, markerData)
+        #AWGFunc.sendMarkerData(self.awg, name, numSamples, markerData)
         markerData = AWGfun.createMarkerData(marker1)
-        AWGfun.sendMarkerData(awg, name_control, samples, markerData)
-        AWGfun.sendMarkerData(awg, name_signal, samples, markerData)
+        AWGfun.sendMarkerData(self.awg, name_control, samples, markerData)
+        AWGfun.sendMarkerData(self.awg, name_signal, samples, markerData)
 
         "Load waveform onto channels, turn on outputs, and begin playback"
         # channelNum = 1
-        # AWGfun.loadWaveform(awg, name, channelNum)
-        AWGfun.loadWaveform(awg, name_control, 1)
-        AWGfun.loadWaveform(awg, name_signal, 2)
+        # AWGfun.loadWaveform(self.awg, name, channelNum)
+        AWGfun.loadWaveform(self.awg, name_control, 1)
+        AWGfun.loadWaveform(self.awg, name_signal, 2)
 
         #IMPORTANT: If not sending anything to a channel, need to write the corresponding output off.
-        awg.write('output1 on')
-        awg.write('output2 on')
-        awg.write('output3 off')
-        awg.write('output4 off')
-        awg.write('awgcontrol:run:immediate') #Start run
+        self.awg.write('output1 on')
+        self.awg.write('output2 on')
+        self.awg.write('output3 off')
+        self.awg.write('output4 off')
+        self.awg.write('awgcontrol:run:immediate') #Start run
 
         "Check for errors"
-        AWGfun.checkErrors(awg)
+        AWGfun.checkErrors(self.awg)
+
+    def set_awg_ref(self, signal_width):
+        "Generate Pulses"
+        samples, _, name_signal, _, signal_ch, marker1 = self.gen_pulse(10, signal_width, 0)
+
+        "Send Waveform Data"
+        AWGfun.sendWaveform(self.awg, name_signal, samples, signal_ch)
+
+        "Send Marker data"
+        markerData = AWGfun.createMarkerData(marker1)
+        AWGfun.sendMarkerData(self.awg, name_signal, samples, markerData)
+
+        "Load waveform onto channels, turn on outputs, and begin playback"
+        AWGfun.loadWaveform(self.awg, name_signal, 2)
+
+        #IMPORTANT: If not sending anything to a channel, need to write the corresponding output off.
+        self.awg.write('output1 off')
+        self.awg.write('output2 on')
+        self.awg.write('output3 off')
+        self.awg.write('output4 off')
+        self.awg.write('awgcontrol:run:immediate') #Start run

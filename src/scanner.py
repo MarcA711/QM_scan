@@ -22,7 +22,7 @@ class ScanWorker(QObject):
         del(self.awg_ctl)
 
     def do_reference_measurement(self, signal_width):
-        self.awg_ctl.set_awg(self.awg, write_width, signal_width, offset)
+        self.awg_ctl.set_awg_ref(signal_width)
         time.sleep(2)
         data, bins = self.mh_ctl.get_data()
 
@@ -35,7 +35,7 @@ class ScanWorker(QObject):
         self.finished_ref_scan.emit(result)
 
     def do_single_scan(self, write_width, signal_width, offset):
-        self.awg_ctl.set_awg(self.awg, write_width, signal_width, offset)
+        self.awg_ctl.set_awg_scan(write_width, signal_width, offset)
         time.sleep(2)
         data, bins = self.mh_ctl.get_data()
 
@@ -50,13 +50,14 @@ class ScanWorker(QObject):
         self.finished_scan.emit(result)
 
     def do_repeated_scan(self, params):
-        self._stop = False
-        for signal_width in params["signal_width"]:
-            # perform reference measurement in EIT mode for any new signal width
-            self.do_reference_measurement(signal_width)
+        self.do_reference_measurement(100)
+        # self._stop = False
+        # for signal_width in params["signal_width"]:
+        #     # perform reference measurement in EIT mode for any new signal width
+        #     self.do_reference_measurement(signal_width)
 
-            for write_width in params["write_width"]:
-                for offset in params["offset"]:
-                    if self._stop:
-                        return
-                    self.do_single_scan(write_width, signal_width, offset)
+        #     for write_width in params["write_width"]:
+        #         for offset in params["offset"]:
+        #             if self._stop:
+        #                 return
+        #             self.do_single_scan(write_width, signal_width, offset)

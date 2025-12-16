@@ -105,10 +105,10 @@ class MyWidget(QtWidgets.QWidget):
             item, ref = self.parameter_settings(parameter_name)
             self.parameter_widgets[parameter_name] = ref
             scan_control_box_layout.addLayout(item)
-        
-        self.scan_control_start_button = QtWidgets.QPushButton("start")
-        scan_control_box_layout.addWidget(self.scan_control_start_button)
-        self.scan_control_start_button.clicked.connect(self.start_scan)
+
+        scan_control_start_button = QtWidgets.QPushButton("start")
+        scan_control_box_layout.addWidget(scan_control_start_button)
+        scan_control_start_button.clicked.connect(self.start_scan)
 
     def closeEvent(self, event):
         self.stop_scanning()
@@ -154,7 +154,6 @@ class MyWidget(QtWidgets.QWidget):
 
         return layout, (val_min, val_max, val_step)
 
-    
     def start_scan(self):
         self.model.clear()
         self.scan_data = {}
