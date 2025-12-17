@@ -10,5 +10,6 @@ dependencies = [
     "pyside6>=6.10.1",
     "pyvisa>=1.15.0",
     "pyvisa-py>=0.8.1",
+    "scipy>=1.16.3",
     "snapi>=1.1.2",
 ]

@@ -142,7 +142,7 @@ class AwgCtl:
     
     def loadWaveform(self, name, channelNum):
         if channelNum in [1,2]:
-            return self.awg.write(f"source{channelNum}:waveform {name}")
+            return self.awg.write(f"source{channelNum}:waveform \"{name}\"")
         else:
             print("Enter valid channel number (1 or 2)")
 
