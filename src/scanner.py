@@ -3,6 +3,7 @@ import time
 
 from awg_ctl import AwgCtl
 from mh_ctl import MhCtl
+import numpy as np
 
 
 class ScanWorker(QObject):
@@ -22,7 +23,9 @@ class ScanWorker(QObject):
         del(self.awg_ctl)
 
     def do_reference_measurement(self, signal_width):
-        self.awg_ctl.set_awg_ref(signal_width)
+        "Generate Pulses"
+        samples, control_ch, signal_ch, marker1, t0, tw_pulse_s = AwgCtl.gen_ref_pulse(signal_width)
+        self.awg_ctl.set_awg(samples, control_ch, signal_ch, marker1)
         time.sleep(2)
         data, bins = self.mh_ctl.get_data()
 
@@ -30,12 +33,15 @@ class ScanWorker(QObject):
             "signal_width": signal_width,
             "bins": bins,
             "data": data,
+            "counts": 0
         }
 
         self.finished_ref_scan.emit(result)
 
     def do_single_scan(self, write_width, signal_width, offset):
-        self.awg_ctl.set_awg_scan(write_width, signal_width, offset)
+        "Generate Pulses"
+        samples, control_ch, signal_ch, marker1 = AwgCtl.gen_scan_pulse(write_width, signal_width, offset)
+        self.awg_ctl.set_awg(samples, control_ch, signal_ch, marker1)
         time.sleep(2)
         data, bins = self.mh_ctl.get_data()
 
@@ -45,6 +51,7 @@ class ScanWorker(QObject):
             "offset": offset,
             "bins": bins,
             "data": data,
+            "counts": 0
         }
 
         self.finished_scan.emit(result)

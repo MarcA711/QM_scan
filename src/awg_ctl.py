@@ -67,16 +67,17 @@ class AwgCtl:
         t = x/sample_rate
 
         "Translating time based parameters to samples"
-        s0_pulse_c = np.rint(t0_pulse_c*sample_rate) 
+        s0_pulse_c = np.rint(t0_pulse_c*sample_rate)
         s0_pulse_s = np.rint(t0_pulse_s*sample_rate)
         s0_pulse_p = np.rint(t0_pulse_p*sample_rate)
+        s0_pulse_r = s0_pulse_c+s_storage
         s_storage = np.rint(t_storage*sample_rate)
         sw_pulse_c = np.rint(tw_pulse_c*sample_rate)
         sw_pulse_s = np.rint(tw_pulse_s*sample_rate)
         sw_pulse_p = np.rint(tw_pulse_p*sample_rate)
 
         "Writing pulses"
-        pulse_c = AwgCtl.gaussian(x, s0_pulse_c, sw_pulse_c)+AwgCtl.gaussian(x, s0_pulse_c+s_storage, sw_pulse_c)
+        pulse_c = AwgCtl.gaussian(x, s0_pulse_c, sw_pulse_c)+AwgCtl.gaussian(x, s0_pulse_r, sw_pulse_c)
         pulse_s = AwgCtl.gaussian(x, s0_pulse_s, sw_pulse_s)
         pulse_p = AwgCtl.supergauss(x, s0_pulse_p, sw_pulse_p, 5)
 
@@ -88,21 +89,15 @@ class AwgCtl:
         marker1 = np.zeros(samples, dtype=int)
         marker1[mark_start:mark_stop] = np.ones(mark_stop-mark_start, dtype=int)
 
-        return samples, control_ch, signal_ch, marker1
+        return samples, control_ch, signal_ch, marker1, s0_pulse_r, s0_pulse_s
     
-    def gen_ref_pulse(write_width, signal_width, offset):
+    def gen_ref_pulse(signal_width):
         sample_rate = 2.5E9 #(samples/s)
         samples = 5000 #(maximum 2E9 samples in memory)
 
-        tw_pulse_c = write_width * 1E-9 #(in s) width of control pulse
         tw_pulse_s = signal_width * 1E-9 #(in s) width of signal pulse
-        tw_pulse_p = 100E-9 #(in s) width of pump pulse
-
-        t0_pulse_p = 150E-9 #(in s) center of pump pulse
-        t0_pulse_c = t0_pulse_p + tw_pulse_p + 150E-9 #(in s) center of control pulse
-        t0_pulse_s = t0_pulse_c + 27E-9 + offset*1E-9 #(in s) center of signal pulse
-
-        t_storage = 100E-9 #(in s) Storage time. Delay between write and read pulses
+        tw_pulse_p = 5 * tw_pulse_s #(in s) width of pump pulse
+        t0 = 150e-9 + (tw_pulse_p/2) # center of pulse
 
         mark_start = 50
         mark_stop = int(samples - samples/2)
@@ -111,28 +106,23 @@ class AwgCtl:
         t = x/sample_rate
 
         "Translating time based parameters to samples"
-        s0_pulse_c = np.rint(t0_pulse_c*sample_rate) 
-        s0_pulse_s = np.rint(t0_pulse_s*sample_rate)
-        s0_pulse_p = np.rint(t0_pulse_p*sample_rate)
-        s_storage = np.rint(t_storage*sample_rate)
-        sw_pulse_c = np.rint(tw_pulse_c*sample_rate)
+        s0 = np.rint(t0*sample_rate)
         sw_pulse_s = np.rint(tw_pulse_s*sample_rate)
         sw_pulse_p = np.rint(tw_pulse_p*sample_rate)
 
         "Writing pulses"
-        pulse_c = AwgCtl.gaussian(x, s0_pulse_c, sw_pulse_c)+AwgCtl.gaussian(x, s0_pulse_c+s_storage, sw_pulse_c)
-        pulse_s = AwgCtl.gaussian(x, s0_pulse_s, sw_pulse_s)
-        pulse_p = AwgCtl.supergauss(x, s0_pulse_p, sw_pulse_p, 5)
+        pulse_s = AwgCtl.gaussian(x, s0, sw_pulse_s)
+        pulse_p = AwgCtl.supergauss(x, s0, sw_pulse_p, 5)
 
         "Writting waveforms for maximum amplitude (-1 to 1)"
-        control_ch = 2*(pulse_p+pulse_c)-1 
+        control_ch = 2*(pulse_p)-1
         signal_ch = 2*(pulse_s)-1
 
         "Storing waveforms"
         marker1 = np.zeros(samples, dtype=int)
         marker1[mark_start:mark_stop] = np.ones(mark_stop-mark_start, dtype=int)
 
-        return samples, control_ch, signal_ch, marker1
+        return samples, control_ch, signal_ch, marker1, t0, tw_pulse_s
 
     def sendMarkerData(self, name, recordLength, markerData):
         marker_bytes = len(markerData) * 4 #Convert to number of bytes as specified by manual
@@ -161,10 +151,7 @@ class AwgCtl:
         error = self.awg.query('system:error:all?')
         print('Status: {}'.format(error))
 
-    def set_awg_scan(self, write_width, signal_width, offset):
-        "Generate Pulses"
-        samples, control_ch, signal_ch, marker1 = AwgCtl.gen_scan_pulse(write_width, signal_width, offset)
-
+    def set_awg(self, samples, control_ch, signal_ch, marker1):
         "Send Waveform Data"
         self.sendWaveform("control_pulse", samples, control_ch)
         self.sendWaveform("signal_pulse", samples, signal_ch)
